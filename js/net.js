@@ -32,10 +32,9 @@ class SupaRoom extends Room {
         else if (s === 'CHANNEL_ERROR' || s === 'TIMED_OUT' || s === 'CLOSED') { clearTimeout(to); rej(new Error(s)); }
       });
     });
-    await this.track(state);
+    await this.ch.track(state);   // once: presence changes are rate-limited by Supabase
   }
   send(t, d = {}) { this.ch?.send({ type: 'broadcast', event: 'm', payload: { t, from: this.me.id, ...d } }); }
-  async track(state) { this.state = state; await this.ch.track(state); }
   async leave() { try { await this.ch.untrack(); await client.removeChannel(this.ch); } catch (e) {} }
 }
 

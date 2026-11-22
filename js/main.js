@@ -143,7 +143,7 @@ async function enterRoom(code) {
   try {
     const state = { name: me.name, team: 'A', joined: Date.now(), mode: 'copilot' };
     const room = await joinRoom(code, me, state, LOCAL);
-    session = { room, code, state, cfg: null, crew: null, ghosts: {}, sendT: 0 };
+    session = { room, code, state, info: {}, cfg: null, crew: null, ghosts: {}, sendT: 0, stT: 0 };
     bindRoom(room);
     $('#netErr').textContent = '';
     history.replaceState(null, '', '#' + code);
@@ -153,11 +153,17 @@ async function enterRoom(code) {
   }
 }
 
+// Presence (name, join time) is sent once when joining: Supabase closes a player's connection if presence
+// changes more than a few times per 30 s. Team and mode choices travel as ordinary messages instead.
+function lobbyPeers() {
+  return session.room.peers().map(p => ({ ...p, ...(p.id === me.id ? { team: session.state.team, mode: session.state.mode } : session.info[p.id] || {}) }));
+}
+function sendSt() { session?.room.send('st', { state: { team: session.state.team, mode: session.state.mode } }); }
 function hostOf(peers) { return [...peers].sort((a, b) => (a.joined - b.joined) || (a.id < b.id ? -1 : 1))[0]; }
 
 function renderLobby() {
   if (!session) return;
-  const peers = session.room.peers(), host = hostOf(peers), amHost = host && host.id === me.id;
+  const peers = lobbyPeers(), host = hostOf(peers), amHost = host && host.id === me.id;
   const m = host?.mode || 'copilot';
   $('#lobbyCode').textContent = session.code;
   $('#modeCo').setAttribute('aria-pressed', m === 'copilot'); $('#modeRace').setAttribute('aria-pressed', m === 'race');
@@ -174,7 +180,9 @@ function renderLobby() {
 }
 
 function bindRoom(room) {
-  room.onPeers(() => { if (mode === 'menu' || mode === 'lobby' || !session?.cfg) renderLobby(); else checkAuthority(); });
+  let known = 0;
+  room.onPeers(list => { if (list.length > known) sendSt(); known = list.length; if (!session?.cfg) renderLobby(); else checkAuthority(); });
+  room.on('st', m => { if (!session) return; session.info[m.from] = m.state; if (!session.cfg) renderLobby(); });
   room.on('start', m => startOnline(m.cfg));
   room.on('aim', m => { if (game && session?.crew === m.crew) game.remoteAim(m.from, m.id, m.typed, m.color, m.name); });
   room.on('kill', m => { if (game && session?.crew === m.crew) game.remoteKill(m.id, m.from); });
@@ -186,10 +194,10 @@ function bindRoom(room) {
   });
 }
 
-async function setMyState(patch) { Object.assign(session.state, patch); await session.room.track(session.state); renderLobby(); }
+function setMyState(patch) { Object.assign(session.state, patch); sendSt(); renderLobby(); }
 
 function hostStart() {
-  const peers = [...session.room.peers()].sort((a, b) => (a.joined - b.joined) || (a.id < b.id ? -1 : 1));
+  const peers = [...lobbyPeers()].sort((a, b) => (a.joined - b.joined) || (a.id < b.id ? -1 : 1));
   const host = peers[0], m = host.mode || 'copilot';
   const crews = m === 'copilot' ? { A: peers.map(p => p.id) } : { A: peers.filter(p => (p.team || 'A') === 'A').map(p => p.id), B: peers.filter(p => p.team === 'B').map(p => p.id) };
   const names = Object.fromEntries(peers.map(p => [p.id, p.name]));
@@ -229,6 +237,7 @@ function checkAuthority() {
 }
 
 function onlineTick(dt) {
+  if (session && !session.cfg) { session.stT -= dt; if (session.stT <= 0) { session.stT = 2.5; sendSt(); } }   // late joiners learn teams
   if (!session?.cfg || !game) return;
   session.sendT -= dt;
   if (game.auth && session.sendT <= 0 && (mode === 'play' || mode === 'over')) {
