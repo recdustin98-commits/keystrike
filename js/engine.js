@@ -1,7 +1,7 @@
 import { wordsFor } from './words.js';
 
 export const ZMAX = 130;   // meters ahead that are drawn
-export const ZVIS = 116;   // meters ahead where words can be read and targeted
+export const ZVIS = 128;   // words show as soon as their object appears at the top
 
 function rng(a) {
   return function () {
@@ -361,6 +361,7 @@ export class Game {
     const k = Math.min(1.15, W / 400);
     for (const [o, z] of vis) {
       const P = this.proj(o.x, z), r = Math.max(3, (o.threat ? 34 : 24) * P.s * k);
+      g.globalAlpha = clamp((ZMAX - z) / 12, 0, 1);   // fade in at the horizon
       if (o.threat) {
         if (z < 38) { g.strokeStyle = `rgba(255,80,60,${0.35 + Math.sin(now / 90) * 0.25})`; g.lineWidth = 3; g.beginPath(); g.arc(P.x, P.y, r + 7, 0, 6.28); g.stroke(); }
         g.save(); g.translate(P.x, P.y); g.rotate(o.rot + this.t * o.spin); g.drawImage(this.ast[o.v], -r * 1.1, -r * 1.1, r * 2.2, r * 2.2); g.restore();
@@ -370,11 +371,12 @@ export class Game {
       }
       for (const a of this.aims.values()) if (a.id === o.id) { g.strokeStyle = a.color; g.lineWidth = 2.5; g.setLineDash([6, 5]); g.beginPath(); g.arc(P.x, P.y, r + 11, 0, 6.28); g.stroke(); g.setLineDash([]); }
       if (this.target === o) { g.strokeStyle = this.me.color; g.lineWidth = 2.5; g.beginPath(); g.arc(P.x, P.y, r + 11, 0, 6.28); g.stroke(); }
+      g.globalAlpha = 1;
       o._P = P; o._r = r; o._z = z;
     }
     // labels (after all bodies so they stay readable). Nearest first; a label that would cover
     // another one is moved above its object, or left out until it is closer.
-    const placed = [[cx - 46, sy - 34, 92, 74]];
+    const placed = [[cx - 46, sy - 34, 92, 74], [0, 0, W, 64]];   // ship and top bar stay clear
     const hitR = (x, y, w, h) => placed.some(([a, b, c, d]) => x < a + c && x + w > a && y < b + d && y + h > b);
     const near = vis.filter(([, z]) => z > 0 && z < ZVIS).sort((a, b) => {
       const pa = (a[0] === this.target || [...this.aims.values()].some(x => x.id === a[0].id)) ? -1 : 0;
@@ -388,16 +390,21 @@ export class Game {
       const mine = this.target === o, other = [...this.aims.values()].find(a => a.id === o.id);
       const typed = mine ? this.typed : other ? other.typed : 0, col = mine ? this.me.color : other ? other.color : null;
       const tw = g.measureText(o.w).width, pw = tw + 16, ph = fs + 9;
-      const px = clamp(P.x - pw / 2, 4, W - pw - 4);
-      let py = Math.min(H - ph - 4, P.y + r + 5);
-      if (hitR(px, py, pw, ph)) { const up = P.y - r - ph - 5; if (!hitR(px, up, pw, ph)) py = up; else if (!mine && !other) continue; }
+      // try below, then beside (right, left), then above the object
+      const spots = [[P.x - pw / 2, P.y + r + 5], [P.x + r + 6, P.y - ph / 2], [P.x - r - 6 - pw, P.y - ph / 2], [P.x - pw / 2, P.y - r - ph - 5]]
+        .map(([x, y]) => [clamp(x, 4, W - pw - 4), Math.min(H - ph - 4, y)]);
+      let spot = spots.find(([x, y]) => !hitR(x, y, pw, ph));
+      if (!spot) { if (!mine && !other) continue; spot = spots[0]; }
+      const [px, py] = spot;
       placed.push([px - 3, py - 3, pw + 6, ph + 6]);
+      g.globalAlpha = clamp((ZMAX - o._z) / 10, 0, 1);
       g.fillStyle = 'rgba(6,10,28,.86)'; g.strokeStyle = col || (o.threat ? 'rgba(255,130,100,.85)' : 'rgba(242,193,78,.7)'); g.lineWidth = col ? 2.5 : 1.2;
       g.beginPath(); g.roundRect(px, py, pw, ph, ph / 2); g.fill(); g.stroke();
       const done = o.w.slice(0, typed);
       g.fillStyle = col || '#fff'; g.fillText(done, px + 8, py + ph / 2 + 1);
       g.fillStyle = o.threat ? '#ffffff' : '#ffe7a8'; g.fillText(o.w.slice(typed), px + 8 + g.measureText(done).width, py + ph / 2 + 1);
       if (other && !mine) { g.font = '600 11px "Exo 2",sans-serif'; g.fillStyle = other.color; g.fillText(other.name, px, py - 8); }
+      g.globalAlpha = 1;
     }
     g.textBaseline = 'alphabetic';
 
