@@ -32,7 +32,7 @@ export class Course {
   }
   add(d) {
     const r = this.r, id = this.list.length;
-    const threat = r() < Math.min(0.5, 0.27 + d / 6000);
+    const threat = r() < Math.min(0.48, 0.27 + d / 12000);
     const x = threat ? (r() * 2 - 1) * 0.3 : (r() < 0.5 ? -1 : 1) * (1 + r() * (1.3 + 0.3 * (this.crew - 1)));
     const pool = wordsFor(d);
     const used = new Set(this.list.slice(-Math.min(22, 10 + this.crew * 4)).map(o => o.w[0]));
@@ -136,7 +136,7 @@ export class Game {
   base(d) {
     if (this.mode === 'race') return 10 + d * 0.0025;
     if (this.demo) return 9;
-    return Math.min(24, 8.5 + d * 0.005);
+    return Math.min(22, 8.5 + d * 0.0025);
   }
   level() { return 1 + Math.floor(this.p.dist / 400); }
   calcSpeed() {

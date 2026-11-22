@@ -18,6 +18,6 @@ const P = [
 
 // Pool by distance travelled (meters). Deterministic for every player.
 export function wordsFor(d) {
-  const i = d < 250 ? 0 : d < 550 ? 1 : d < 900 ? 2 : d < 1300 ? 3 : d < 1800 ? 4 : d < 2600 ? 5 : 6;
+  const i = d < 400 ? 0 : d < 900 ? 1 : d < 1500 ? 2 : d < 2200 ? 3 : d < 3000 ? 4 : d < 4000 ? 5 : 6;
   return P[i];
 }
