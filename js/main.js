@@ -176,7 +176,7 @@ function renderLobby() {
   const a = peers.filter(p => (p.team || 'A') === 'A').length, b = peers.length - a;
   const ok = m === 'copilot' ? peers.length >= 2 : a >= 1 && b >= 1 && a <= 4 && b <= 4;
   $('#startBtn').hidden = !amHost; $('#startBtn').disabled = !ok;
-  $('#waitHint').textContent = amHost ? (ok ? '' : m === 'copilot' ? 'Waiting for at least one more player' : 'Each crew needs 1 to 4 players') : 'Waiting for the host to start';
+  $('#waitHint').textContent = amHost ? (ok ? '' : m === 'copilot' ? 'Waiting for at least one more player' : 'Each crew needs at least 1 player. Someone must tap Red crew.') : (m === 'race' ? 'Pick your crew above, then wait for the host to start' : 'Waiting for the host to start');
 }
 
 function bindRoom(room) {
