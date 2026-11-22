@@ -19,7 +19,8 @@ export class Course {
   constructor(seed, crew = 1) {
     this.r = rng(seed);
     this.crew = crew;
-    this.spacing = 12.5 / (1 + 0.55 * (crew - 1));
+    this.spacing = 17 / (1 + 0.55 * (crew - 1));
+    this.lastThreat = 0;
     this.list = [];
     this.next = ZMAX - 4;    // first obstacle appears at the horizon right at GO, not on top of you
   }
@@ -32,7 +33,10 @@ export class Course {
   }
   add(d) {
     const r = this.r, id = this.list.length;
-    const threat = r() < Math.min(0.48, 0.27 + d / 12000);
+    // Mostly rocks in your lane (never a long empty stretch); fewer gold crystals on the sides.
+    const roll = r();
+    const threat = d - this.lastThreat > this.spacing * 2.2 || roll < Math.min(0.72, 0.6 + d / 25000);
+    if (threat) this.lastThreat = d;
     const x = threat ? (r() * 2 - 1) * 0.3 : (r() < 0.5 ? -1 : 1) * (1 + r() * (1.3 + 0.3 * (this.crew - 1)));
     const pool = wordsFor(d);
     const used = new Set(this.list.slice(-Math.min(22, 10 + this.crew * 4)).map(o => o.w[0]));
@@ -134,9 +138,9 @@ export class Game {
 
   /* ---- rules ---- */
   base(d) {
-    if (this.mode === 'race') return 10 + d * 0.0025;
+    if (this.mode === 'race') return 11 + d * 0.003;
     if (this.demo) return 9;
-    return Math.min(22, 8.5 + d * 0.0025);
+    return Math.min(25, 10.5 + d * 0.003);
   }
   level() { return 1 + Math.floor(this.p.dist / 400); }
   calcSpeed() {
