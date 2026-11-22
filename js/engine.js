@@ -117,6 +117,7 @@ export class Game {
     this.crew = o.crew || 1;
     this.auth = o.auth !== false;            // this device moves the plane and keeps score
     this.me = o.me || { id: 'me', color: '#7fe0ff', name: 'You' };
+    this.seats = o.seats && o.seats.length ? o.seats : [this.me];   // co-pilots on this ship, in seat order
     this.raceLen = o.raceLen || 2000;
     this.cb = o.cb || {};
     this.course = new Course(this.seed, this.crew);
@@ -204,10 +205,11 @@ export class Game {
   }
 
   pick(c) {
+    // A rock someone else is already aiming at is theirs: never pick it.
     const taken = new Set([...this.aims.values()].map(a => a.id));
     const cand = this.visible().filter(([o, z]) => z > 1.5 && z < ZVIS && o.w[0] === c);
     const free = cand.filter(([o]) => !taken.has(o.id));
-    const list = free.length ? free : cand;
+    const list = free;
     list.sort((a, b) => (b[0].threat - a[0].threat) || (a[1] - b[1]));
     return list[0] ? list[0][0] : null;
   }
@@ -223,7 +225,7 @@ export class Game {
     }
     if (o.w[this.typed] !== c) return this.miss();
     this.typed++; if (!this.demo) this.stats.good++;
-    this.beams.push({ o, life: 0.1 });
+    this.beams.push({ o, life: 0.1, seat: this.me.id });
     this.sound?.zap(this.typed);
     this.cb.onAim?.(o.id, this.typed);
     if (this.typed >= o.w.length) this.kill(o, this.me.id, true);
@@ -279,7 +281,26 @@ export class Game {
   }
 
   /* ---- multiplayer hooks ---- */
-  remoteAim(seat, id, typed, color, name) { if (id == null) this.aims.delete(seat); else this.aims.set(seat, { id, typed, color, name }); }
+  remoteAim(seat, id, typed, color, name) {
+    const prev = this.aims.get(seat);
+    if (id == null) { this.aims.delete(seat); return; }
+    this.aims.set(seat, { id, typed, color, name });
+    const o = this.course.list[id];
+    if (o && (!prev || prev.id !== id || typed > prev.typed)) this.beams.push({ o, life: 0.1, seat });
+    // Both picked the same rock at the same moment: whoever typed more keeps it (tie: lower id).
+    if (this.target && this.target.id === id && (typed > this.typed || (typed === this.typed && seat < this.me.id))) {
+      const P = this.target._P;
+      this.target = null; this.typed = 0; this.cb.onAim?.(null, 0);
+      if (P) this.floats.push({ x: P.x, y: P.y - 20, t: name + ' has it', c: color, life: 0.9 });
+    }
+  }
+  seatColor(id) { return (this.seats.find(s => s.id === id) || this.me).color; }
+  gunPos(id) {
+    const n = this.seats.length, i = Math.max(0, this.seats.findIndex(s => s.id === id)), sc = Math.min(1.2, this.W / 380);
+    const OFF = [[0], [-22, 22], [-24, 0, 24], [-27, -9, 9, 27]][Math.min(n, 4) - 1];
+    const x = this.W / 2 + (OFF[i] ?? 0) * sc, y = this.H - 52 + 6 + (n === 1 ? -22 : 10) * sc;
+    return { x, y };
+  }
   remoteKill(id, seat) { this.course.ensure(this.p.dist + ZMAX + 40); const o = this.course.list[id]; if (o) this.kill(o, seat, false); }
   remoteMiss() { if (this.auth) this.p.combo = 0; }
   planeState() { const p = this.p; return { dist: +p.dist.toFixed(2), speed: +p.speed.toFixed(2), lives: p.lives, score: p.score, combo: p.combo, best: p.best, boostT: +p.boostT.toFixed(2), slowT: +p.slowT.toFixed(2), finished: p.finished, over: p.over, time: +p.time.toFixed(2) }; }
@@ -413,19 +434,34 @@ export class Game {
     const want = tP ? Math.atan2(tP.x - cx, sy - tP.y) : 0; this.aim += (want - this.aim) * 0.25;
     g.globalCompositeOperation = 'lighter';
     for (const b of this.beams) {
-      if (!b.o._P) continue; const a = b.life / 0.1;
-      g.strokeStyle = `rgba(127,224,255,${0.25 * a})`; g.lineWidth = 9; g.beginPath(); g.moveTo(cx, sy - 14); g.lineTo(b.o._P.x, b.o._P.y); g.stroke();
-      g.strokeStyle = `rgba(230,250,255,${a})`; g.lineWidth = 2.5; g.stroke();
+      if (!b.o._P) continue; const a = b.life / 0.1, G = this.gunPos(b.seat), col = this.seatColor(b.seat);
+      g.strokeStyle = col; g.globalAlpha = 0.3 * a; g.lineWidth = 9; g.beginPath(); g.moveTo(G.x, G.y); g.lineTo(b.o._P.x, b.o._P.y); g.stroke();
+      g.globalAlpha = a; g.strokeStyle = 'rgba(240,252,255,1)'; g.lineWidth = 2.5; g.stroke(); g.globalAlpha = 1;
     }
-    for (const a of this.aims.values()) {
-      const o = this.course.list[a.id]; if (!o || !o._P || this.dead.has(o.id)) continue;
-      g.strokeStyle = a.color; g.globalAlpha = 0.35; g.lineWidth = 2; g.setLineDash([4, 6]); g.beginPath(); g.moveTo(cx, sy - 14); g.lineTo(o._P.x, o._P.y); g.stroke(); g.setLineDash([]); g.globalAlpha = 1;
+    for (const [seat, a] of this.aims) {
+      const o = this.course.list[a.id]; if (!o || !o._P || this.dead.has(o.id)) continue; const G = this.gunPos(seat);
+      g.strokeStyle = a.color; g.globalAlpha = 0.4; g.lineWidth = 2; g.setLineDash([4, 6]); g.beginPath(); g.moveTo(G.x, G.y); g.lineTo(o._P.x, o._P.y); g.stroke(); g.setLineDash([]); g.globalAlpha = 1;
     }
     for (const r of this.rings) { const t = 1 - r.life / 0.35; g.strokeStyle = `rgba(${r.c},${1 - t})`; g.lineWidth = 3; g.beginPath(); g.arc(r.x, r.y, r.r0 + t * 60, 0, 6.28); g.stroke(); }
     for (const q of this.parts) { g.globalAlpha = Math.min(1, q.life * 2); g.fillStyle = q.c; g.beginPath(); g.arc(q.x, q.y, q.r, 0, 6.28); g.fill(); }
     g.globalAlpha = 1; g.globalCompositeOperation = 'source-over';
 
-    this.drawShip(cx, sy + 6, Math.min(1.2, W / 380), this.me.color, 1, now, clamp(this.aim * 0.4, -0.3, 0.3), p.boostT > 0);
+    const crew = this.seats.length > 1;
+    this.drawShip(cx, sy + 6, Math.min(1.2, W / 380), crew ? '#9fb4d8' : this.me.color, 1, now, crew ? 0 : clamp(this.aim * 0.4, -0.3, 0.3), p.boostT > 0);
+    if (crew) {   // one gun per pilot, in that pilot's color, turning toward what they aim at
+      for (const s of this.seats) {
+        const G = this.gunPos(s.id), mine = s.id === this.me.id;
+        const tgt = mine ? this.target : (() => { const a = this.aims.get(s.id); return a ? this.course.list[a.id] : null; })();
+        const ang = tgt && tgt._P && !this.dead.has(tgt.id) ? Math.atan2(tgt._P.x - G.x, G.y - tgt._P.y) : 0;
+        g.save(); g.translate(G.x, G.y); g.rotate(ang);
+        g.fillStyle = s.color; g.fillRect(-2.5, -15, 5, 13);
+        g.beginPath(); g.arc(0, 0, mine ? 7.5 : 6.5, 0, 6.28); g.fill();
+        g.strokeStyle = mine ? '#ffffff' : 'rgba(4,6,15,.8)'; g.lineWidth = mine ? 2 : 1.5; g.stroke();
+        g.restore();
+        g.font = '700 11px "Exo 2",sans-serif'; g.textAlign = 'center'; g.fillStyle = s.color;
+        g.fillText(mine ? 'YOU' : s.name.slice(0, 8), G.x, Math.min(H - 4, G.y + 40)); g.textAlign = 'start';
+      }
+    }
 
     g.textAlign = 'center'; g.font = '700 16px "Exo 2",sans-serif';
     for (const f of this.floats) { g.globalAlpha = Math.min(1, f.life * 2); g.fillStyle = f.c; g.fillText(f.t, f.x, f.y); }

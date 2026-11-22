@@ -211,6 +211,7 @@ function startOnline(cfg) {
   game = new Game(cv, {
     mode: cfg.mode === 'race' ? 'race' : 'copilot', seed: cfg.seed, crew: list.length, raceLen: cfg.raceLen,
     auth: auth === me.id, me, sound,
+    seats: cfg.mode === 'race' ? null : list.map((id, i) => ({ id, name: cfg.names[id] || '?', color: SEAT[i % SEAT.length] })),
     cb: {
       onAim: (id, typed) => session?.room.send('aim', { crew: session.crew, id, typed, color: me.color, name: me.name }),
       onKill: id => session?.room.send('kill', { crew: session.crew, id }),
