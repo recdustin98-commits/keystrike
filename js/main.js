@@ -302,6 +302,7 @@ $('#card').addEventListener('click', e => {
   if (a === 'again') startSolo();
   if (a === 'resume') { modal(''); input.focus(); mode = 'count'; countT = 2.2; }
   if (a === 'stay') { modal(''); input.focus(); }
+  if (a === 'close') modal('');
   if (a === 'lobby') { modal(''); mode = 'menu'; session.cfg = null; game = new Game(cv, { mode: 'demo', me }); game.start(); show('lobby'); renderLobby(); }
 });
 document.addEventListener('visibilitychange', () => { if (document.hidden) pause(); });
@@ -310,3 +311,21 @@ renderMenu();
 show('menu');
 const hashCode = location.hash.slice(1).toUpperCase();
 if (/^[A-Z]{4}$/.test(hashCode)) { $('#codeIn').value = hashCode; if (me.name) show('online'); }
+
+/* ---------------- install as an app ---------------- */
+const standalone = matchMedia('(display-mode: standalone)').matches || navigator.standalone === true;
+const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+let installEvt = null;
+if ('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js').catch(() => {});
+addEventListener('beforeinstallprompt', e => { e.preventDefault(); installEvt = e; $('#installBtn').hidden = false; });
+addEventListener('appinstalled', () => { $('#installBtn').hidden = true; installEvt = null; });
+if (!standalone && isIOS) $('#installBtn').hidden = false;
+$('#installBtn').onclick = async () => {
+  if (installEvt) { installEvt.prompt(); await installEvt.userChoice.catch(() => {}); installEvt = null; $('#installBtn').hidden = true; return; }
+  const safari = isIOS && !/CriOS|FxiOS|EdgiOS/.test(navigator.userAgent);
+  modal(`<h2>Get the app</h2>
+    ${safari ? `<ol class="steps"><li>Tap the <b>Share</b> button <span class="shr" aria-hidden="true">⬆︎</span> in Safari's toolbar</li><li>Scroll and tap <b>Add to Home Screen</b></li><li>Tap <b>Add</b></li></ol>`
+      : `<p class="sub">Open <b>keystrike-lac.vercel.app</b> in Safari, then tap Share → <b>Add to Home Screen</b>.</p>`}
+    <p class="sub">Keystrike then opens full screen from its own icon, without the address bar.</p>
+    <button class="btn primary" data-a="close">Got it</button>`);
+};
