@@ -21,17 +21,18 @@ export class Course {
     this.crew = crew;
     this.spacing = 12.5 / (1 + 0.55 * (crew - 1));
     this.list = [];
-    this.next = 45;
+    this.next = ZMAX + 15;   // first obstacle appears at the horizon, not on top of you
   }
   ensure(upTo) {
     while (this.next < upTo) {
       this.add(this.next);
-      this.next += this.spacing * (0.7 + this.r() * 0.6);
+      const warm = this.next < 450 ? 1 + 1.3 * (1 - this.next / 450) : 1;   // sparse warm-up
+      this.next += this.spacing * warm * (0.7 + this.r() * 0.6);
     }
   }
   add(d) {
     const r = this.r, id = this.list.length;
-    const threat = r() < Math.min(0.5, 0.32 + d / 12000);
+    const threat = r() < Math.min(0.5, 0.22 + d / 6000);
     const x = threat ? (r() * 2 - 1) * 0.3 : (r() < 0.5 ? -1 : 1) * (1 + r() * (1.3 + 0.3 * (this.crew - 1)));
     const pool = wordsFor(d);
     const used = new Set(this.list.slice(-Math.min(22, 10 + this.crew * 4)).map(o => o.w[0]));
@@ -133,9 +134,9 @@ export class Game {
 
   /* ---- rules ---- */
   base(d) {
-    if (this.mode === 'race') return 11 + d * 0.002;
+    if (this.mode === 'race') return 10 + d * 0.0025;
     if (this.demo) return 9;
-    return Math.min(24, 9 + d * 0.004);
+    return Math.min(24, 7 + d * 0.004);
   }
   level() { return 1 + Math.floor(this.p.dist / 400); }
   calcSpeed() {

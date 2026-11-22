@@ -53,6 +53,8 @@ const input = setupInput({
 /* ---------------- screens ---------------- */
 function show(id) {
   for (const s of document.querySelectorAll('.screen')) s.hidden = s.id !== id;
+  // While playing, only the hidden typing field may take focus (keeps Safari's form arrows inactive).
+  for (const el of document.querySelectorAll('.screen input')) el.disabled = !id;
   document.body.classList.toggle('playing', !id);
 }
 function msg(html) { $('#msg').innerHTML = html; }
