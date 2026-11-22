@@ -1,0 +1,76 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,interactive-widget=resizes-content">
+<title>Keystrike</title>
+<meta name="description" content="Keystrike: fly through an asteroid field by typing. Play solo, as co-pilots, or race crews up to 4 vs 4.">
+<meta name="theme-color" content="#070b1f">
+<link rel="icon" href="icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="icon-180.png">
+<link rel="manifest" href="manifest.json">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Exo+2:wght@500;600;700&family=Orbitron:wght@700;900&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+<div id="app">
+  <div id="stage">
+    <canvas id="cv" aria-label="Game view"></canvas>
+    <header id="hud">
+      <div id="hudMain"></div>
+      <button id="pauseBtn" class="icon" aria-label="Pause or leave">II</button>
+    </header>
+    <div id="msg" aria-live="polite"></div>
+    <div id="tap" hidden>Tap to type</div>
+
+    <section id="menu" class="screen">
+      <div class="panel">
+        <h1 class="logo">KEY<span>STRIKE</span></h1>
+        <p class="tag">Type to fly. Blast the rocks in your path, grab the gold for bonus.</p>
+        <label class="field"><span>Your name</span><input id="nameIn" maxlength="12" autocomplete="nickname" autocapitalize="words" placeholder="Pilot name"></label>
+        <p id="nameErr" class="err" role="alert"></p>
+        <button id="soloBtn" class="btn primary">Solo flight</button>
+        <button id="onlineBtn" class="btn gold">Play with friends</button>
+        <p id="bestLine" class="sub"></p>
+        <button id="sndBtn" class="btn small"></button>
+      </div>
+    </section>
+
+    <section id="online" class="screen" hidden>
+      <div class="panel">
+        <h2>Play with friends</h2>
+        <p class="sub">Create a game and share the 4-letter code, or type a code to join. Up to 8 players.</p>
+        <button id="createBtn" class="btn primary">Create a game</button>
+        <div class="or"><span>or join</span></div>
+        <input id="codeIn" class="code" maxlength="4" autocomplete="off" autocorrect="off" autocapitalize="characters" spellcheck="false" placeholder="CODE" aria-label="Game code">
+        <button id="joinBtn" class="btn gold">Join</button>
+        <p id="netErr" class="err" role="status"></p>
+        <button id="backBtn" class="btn small">Back</button>
+      </div>
+    </section>
+
+    <section id="lobby" class="screen" hidden>
+      <div class="panel">
+        <p class="sub">Game code</p>
+        <div id="lobbyCode" class="bigcode"></div>
+        <button id="shareBtn" class="btn small">Share invite</button>
+        <div class="seg" role="group" aria-label="Mode"><button id="modeCo">Co-pilot</button><button id="modeRace">Crew race</button></div>
+        <p id="modeHint" class="sub"></p>
+        <div id="teamRow" class="seg" role="group" aria-label="Your crew"><button id="teamA" class="tA">Blue crew</button><button id="teamB" class="tB">Red crew</button></div>
+        <ul id="players"></ul>
+        <button id="startBtn" class="btn primary">Start</button>
+        <p id="waitHint" class="sub"></p>
+        <button id="leaveLobby" class="btn small">Leave</button>
+      </div>
+    </section>
+  </div>
+  <div id="kbspace" aria-hidden="true"></div>
+  <input id="ki" type="text" autocomplete="off" autocorrect="off" autocapitalize="none" spellcheck="false" enterkeyhint="done" aria-label="Type here">
+  <div id="modal" hidden><div id="card" class="panel"></div></div>
+</div>
+<script type="module" src="js/main.js"></script>
+</body>
+</html>
