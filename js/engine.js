@@ -299,7 +299,7 @@ export class Game {
   }
   proj(x, z) {
     const f = clamp(1 - z / ZMAX, 0, 1.15), s = 0.26 + 0.74 * f;
-    const hz = this.H * 0.17, sy = this.H - 74;
+    const hz = this.H * 0.17, sy = this.H - 52;
     return { x: this.W / 2 + x * this.W * 0.4 * s, y: hz + (sy - hz) * Math.pow(f, 1.12), s };
   }
 
@@ -310,7 +310,7 @@ export class Game {
     g.drawImage(this.back, 0, 0);
     g.setTransform(dpr, 0, 0, dpr, 0, 0);
     if (this.shake > 0) g.translate(rnd(-5, 5) * this.shake * 3, rnd(-5, 5) * this.shake * 3);
-    const cx = W / 2, hz = H * 0.17, sy = H - 74, sp = Math.max(p.speed, 4);
+    const cx = W / 2, hz = H * 0.17, sy = H - 52, sp = Math.max(p.speed, 4);
 
     // warp stars
     g.lineCap = 'round';
