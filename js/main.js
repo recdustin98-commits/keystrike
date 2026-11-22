@@ -39,7 +39,10 @@ const cv = $('#cv');
 const me = { id: Math.random().toString(36).slice(2, 10), name: store.get('name', ''), color: SEAT[0] };
 let game = new Game(cv, { mode: 'demo', me });
 game.start();
-let mode = 'menu';            // menu | count | play | pause | over
+let mode = 'menu';
+let kbPref = store.get('kb2', null);   // 'game' | 'phone'
+const touch = matchMedia('(pointer:coarse)').matches;
+const gameKb = () => touch && (kbPref || 'game') === 'game';            // menu | count | play | pause | over
 let session = null;           // online session
 let countT = 0;
 
@@ -50,12 +53,34 @@ const input = setupInput({
   isActive: () => mode === 'play' || mode === 'count',
 });
 
+/* ---------------- game keyboard ---------------- */
+const gk = $('#gk');
+gk.innerHTML = ['qwertyuiop', 'asdfghjkl', 'zxcvbnm'].map((row, i) =>
+  `<div class="r">${i === 1 ? '<span class="sp"></span>' : ''}${i === 2 ? '<span class="k wide" style="visibility:hidden"></span>' : ''}${[...row].map(c => `<button class="k" data-k="${c}" aria-label="${c}">${c}</button>`).join('')}${i === 2 ? '<button class="k wide" data-k="clr" aria-label="Clear target">⌫</button>' : ''}${i === 1 ? '<span class="sp"></span>' : ''}</div>`).join('') + '<div class="pop"></div>';
+const pop = gk.querySelector('.pop');
+let popT = 0;
+gk.addEventListener('pointerdown', e => {
+  e.preventDefault();
+  const b = e.target.closest('.k[data-k]'); if (!b) return;
+  const k = b.dataset.k;
+  b.classList.add('on'); setTimeout(() => b.classList.remove('on'), 110);
+  if (k !== 'clr') {
+    const r = b.getBoundingClientRect(), g = gk.getBoundingClientRect();
+    pop.textContent = k; pop.style.left = (r.left - g.left + r.width / 2) + 'px'; pop.style.top = (r.top - g.top + 4) + 'px';
+    pop.classList.add('show'); clearTimeout(popT); popT = setTimeout(() => pop.classList.remove('show'), 120);
+  }
+  try { if (!/iPhone|iPad/.test(navigator.userAgent)) navigator.vibrate?.(6); } catch (err) {}
+  if (mode !== 'play') return;
+  if (k === 'clr') game.clearTarget(); else game.press(k);
+});
+
 /* ---------------- screens ---------------- */
 function show(id) {
   for (const s of document.querySelectorAll('.screen')) s.hidden = s.id !== id;
   // While playing, only the hidden typing field may take focus (keeps Safari's form arrows inactive).
   for (const el of document.querySelectorAll('.screen input')) el.disabled = !id;
   document.body.classList.toggle('playing', !id);
+  gk.hidden = !!id || !gameKb();
 }
 function msg(html) { $('#msg').innerHTML = html; }
 function modal(html) { $('#card').innerHTML = html; $('#modal').hidden = !html; }
@@ -64,6 +89,7 @@ function renderMenu() {
   const b = store.get('best', 0);
   $('#bestLine').textContent = b ? `Best solo score ${b}` : '';
   $('#sndBtn').textContent = 'Sound: ' + (sound.on ? 'on' : 'off');
+  $('#kbBtn').hidden = !touch; $('#kbBtn').textContent = 'Keyboard: ' + (gameKb() ? 'game keyboard' : "phone's keyboard");
   $('#nameIn').value = me.name;
 }
 function toMenu() {
@@ -87,7 +113,7 @@ function startSolo() {
   beginCountdown();
 }
 function beginCountdown() {
-  show(null); modal(''); input.clear(); input.focus();
+  show(null); modal(''); input.clear(); if (!gameKb()) input.focus();
   mode = 'count'; countT = 3.2;
 }
 function endSolo() {
@@ -268,7 +294,7 @@ function loop(now) {
   game.render(now);
   onlineTick(dt);
   hud();
-  $('#tap').hidden = !(input.coarse && (mode === 'play' || mode === 'count') && !input.focused());
+  $('#tap').hidden = !(input.coarse && !gameKb() && (mode === 'play' || mode === 'count') && !input.focused());
   requestAnimationFrame(loop);
 }
 if (LOCAL) window.__ks = () => game;
@@ -277,6 +303,7 @@ requestAnimationFrame(loop);
 /* ---------------- wiring ---------------- */
 $('#soloBtn').onclick = () => { if (needName()) startSolo(); };
 $('#onlineBtn').onclick = () => { if (needName()) { show('online'); $('#netErr').textContent = ''; } };
+$('#kbBtn').onclick = () => { kbPref = gameKb() ? 'phone' : 'game'; store.set('kb2', kbPref); renderMenu(); };
 $('#sndBtn').onclick = () => { sound.on = !sound.on; store.set('sound', sound.on); renderMenu(); };
 $('#createBtn').onclick = () => { const c = Array.from({ length: 4 }, () => 'ABCDEFGHJKLMNPQRSTUVWXYZ'[Math.floor(Math.random() * 24)]).join(''); $('#codeIn').value = c; enterRoom(c); };
 $('#joinBtn').onclick = () => enterRoom($('#codeIn').value);
@@ -297,16 +324,16 @@ $('#pauseBtn').onclick = () => session ? (confirmLeave()) : pause();
 function confirmLeave() { modal(`<h2>Leave the game?</h2><button class="btn primary" data-a="stay">Keep playing</button><button class="btn" data-a="menu">Leave</button>`); }
 // Tapping the game must not move focus off the hidden typing field (Android would keep the keyboard
 // open but send the letters nowhere). Cancelling pointerdown also cancels the follow-up mousedown.
-const keepFocus = e => { if ((mode === 'play' || mode === 'count') && !e.target.closest('button')) { e.preventDefault(); input.focus(); } };
+const keepFocus = e => { if (!gameKb() && (mode === 'play' || mode === 'count') && !e.target.closest('button')) { e.preventDefault(); input.focus(); } };
 $('#stage').addEventListener('pointerdown', keepFocus);
 $('#stage').addEventListener('mousedown', keepFocus);
-$('#stage').addEventListener('touchend', e => { if ((mode === 'play' || mode === 'count') && !e.target.closest('button')) { e.preventDefault(); input.focus(); } }, { passive: false });
+$('#stage').addEventListener('touchend', e => { if (!gameKb() && (mode === 'play' || mode === 'count') && !e.target.closest('button')) { e.preventDefault(); input.focus(); } }, { passive: false });
 $('#card').addEventListener('click', e => {
   const a = e.target.closest('button')?.dataset.a; if (!a) return;
   if (a === 'menu') toMenu();
   if (a === 'again') startSolo();
-  if (a === 'resume') { modal(''); input.focus(); mode = 'count'; countT = 2.2; }
-  if (a === 'stay') { modal(''); input.focus(); }
+  if (a === 'resume') { modal(''); if (!gameKb()) input.focus(); mode = 'count'; countT = 2.2; }
+  if (a === 'stay') { modal(''); if (!gameKb()) input.focus(); }
   if (a === 'close') modal('');
   if (a === 'lobby') { modal(''); mode = 'menu'; session.cfg = null; game = new Game(cv, { mode: 'demo', me }); game.start(); show('lobby'); renderLobby(); }
 });
