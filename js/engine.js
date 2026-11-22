@@ -19,7 +19,7 @@ export class Course {
   constructor(seed, crew = 1) {
     this.r = rng(seed);
     this.crew = crew;
-    this.spacing = 17 / (1 + 0.55 * (crew - 1));
+    this.spacing = 18.5 / (1 + 0.55 * (crew - 1));
     this.lastThreat = 0;
     this.list = [];
     this.next = ZMAX - 4;    // first obstacle appears at the horizon right at GO, not on top of you
@@ -140,7 +140,7 @@ export class Game {
   base(d) {
     if (this.mode === 'race') return 11 + d * 0.003;
     if (this.demo) return 9;
-    return Math.min(25, 10.5 + d * 0.003);
+    return Math.min(24, 9.5 + d * 0.0026);
   }
   level() { return 1 + Math.floor(this.p.dist / 400); }
   calcSpeed() {
