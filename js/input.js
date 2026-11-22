@@ -4,7 +4,16 @@ export function setupInput({ input, spacer, onChar, onClear, isActive }) {
   const coarse = matchMedia('(pointer:coarse)').matches;
   const clear = () => { input.value = ''; lastV = ''; };
 
+  // Some Android keyboards report letters through beforeinput more reliably than through the value.
+  let skip = false;
+  input.addEventListener('beforeinput', e => {
+    if (e.inputType === 'insertText' && e.data) {
+      for (const ch of e.data.toLowerCase()) if (ch >= 'a' && ch <= 'z') onChar(ch);
+      skip = true;
+    }
+  });
   input.addEventListener('input', () => {
+    if (skip) { skip = false; lastV = input.value.toLowerCase(); if (lastV.length > 24) clear(); return; }
     const v = input.value.toLowerCase();
     let p = 0; while (p < lastV.length && p < v.length && lastV[p] === v[p]) p++;
     const add = v.length > lastV.length ? v.slice(p) : '';
