@@ -295,7 +295,12 @@ $('#shareBtn').onclick = async () => {
 };
 $('#pauseBtn').onclick = () => session ? (confirmLeave()) : pause();
 function confirmLeave() { modal(`<h2>Leave the game?</h2><button class="btn primary" data-a="stay">Keep playing</button><button class="btn" data-a="menu">Leave</button>`); }
-$('#stage').addEventListener('pointerdown', e => { if ((mode === 'play' || mode === 'count') && !e.target.closest('button')) input.focus(); });
+// Tapping the game must not move focus off the hidden typing field (Android would keep the keyboard
+// open but send the letters nowhere). Cancelling pointerdown also cancels the follow-up mousedown.
+const keepFocus = e => { if ((mode === 'play' || mode === 'count') && !e.target.closest('button')) { e.preventDefault(); input.focus(); } };
+$('#stage').addEventListener('pointerdown', keepFocus);
+$('#stage').addEventListener('mousedown', keepFocus);
+$('#stage').addEventListener('touchend', e => { if ((mode === 'play' || mode === 'count') && !e.target.closest('button')) { e.preventDefault(); input.focus(); } }, { passive: false });
 $('#card').addEventListener('click', e => {
   const a = e.target.closest('button')?.dataset.a; if (!a) return;
   if (a === 'menu') toMenu();
