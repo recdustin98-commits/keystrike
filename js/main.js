@@ -263,7 +263,8 @@ function loop(now) {
     msg(countT > 0 ? `<b class="count">${Math.min(3, n)}</b>` : '');
     if (countT <= 0) { mode = 'play'; game.start(); sound.go(); }
   }
-  if (mode !== 'pause') game.update(dt);
+  // Freeze the world while paused and during the resume countdown; it moves only in play (and in the menu demo).
+  if (mode === 'play' || mode === 'over' || mode === 'menu' || !game.running) game.update(dt);
   game.render(now);
   onlineTick(dt);
   hud();
