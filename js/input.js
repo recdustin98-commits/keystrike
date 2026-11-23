@@ -23,7 +23,7 @@ export function setupInput({ input, spacer, onChar, onClear, isActive }) {
   });
   input.addEventListener('keydown', e => {
     if (e.key === 'Backspace') { e.preventDefault(); onClear(); }
-    if (e.key === 'Enter') e.preventDefault();
+    if (e.key === 'Enter') { e.preventDefault(); onClear(); }
   });
   input.addEventListener('compositionend', () => setTimeout(clear, 0));
 
@@ -32,7 +32,7 @@ export function setupInput({ input, spacer, onChar, onClear, isActive }) {
     if (!isActive() || e.target === input || e.target.tagName === 'INPUT') return;
     const k = e.key.toLowerCase();
     if (/^[a-z]$/.test(k)) onChar(k);
-    else if (k === 'backspace') { e.preventDefault(); onClear(); }
+    else if (k === 'backspace' || k === 'enter') { e.preventDefault(); onClear(); }
   });
 
   // Keep the play area above the on-screen keyboard:

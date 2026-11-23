@@ -347,7 +347,7 @@ function hud() {
     const gh = game.ghosts.map(g => `<i class="mk" style="left:${pct(g.dist)}%;background:${g.color}"></i>`).join('');
     const lead = game.ghosts.length ? Math.round(p.dist - Math.max(...game.ghosts.map(g => g.dist))) : 0;
     center = `<div class="race"><div class="bar"><i class="fin"></i>${gh}<i class="mk me" style="left:${pct(p.dist)}%;background:${me.color}"></i></div><small>${Math.round(p.dist)} / ${L} m · ${lead >= 0 ? '+' : ''}${lead} m</small></div>`;
-  } else center = `<div class="dist">${Math.round(p.dist)} m<small>Lv ${game.level()}</small></div>`;
+  } else center = `<div class="dist">${Math.round(p.dist)} m<small>${game.target ? (touch ? '⌫ = new target' : 'Enter = new target') : 'Lv ' + game.level()}</small></div>`;
   const lives = p.lives >= 0 ? `<span class="hp">${'♥'.repeat(p.lives)}<s>${'♥'.repeat(Math.max(0, game.maxLives - p.lives))}</s></span>` : '';
   const html = `<div class="sc">${p.score}</div>${center}<div class="rt">${lives}<span class="cb">${p.combo > 1 ? 'x' + p.combo : ''}</span></div>`;
   if (html !== hudCache) { hudCache = html; $('#hudMain').innerHTML = html; }
