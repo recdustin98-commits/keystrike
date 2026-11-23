@@ -383,6 +383,7 @@ $('#lvX').onclick = () => {
   modal(`<h2>Expert is locked</h2><p class="sub">It unlocks when you fly 1,000 m on Beginner. Already a fast typist?</p>
     <button class="btn primary" data-a="unlock">Unlock Expert now</button><button class="btn" data-a="close">Stay on Beginner</button>`);
 };
+if (PORTAL) $('#onlineBtn').hidden = true;
 $('#onlineBtn').onclick = () => { if (needName()) { show('online'); $('#netErr').textContent = ''; } };
 $('#kbBtn').onclick = () => { kbPref = gameKb() ? 'phone' : 'game'; store.set('kb2', kbPref); renderMenu(); };
 $('#sndBtn').onclick = () => { sound.on = !sound.on; store.set('sound', sound.on); renderMenu(); };
