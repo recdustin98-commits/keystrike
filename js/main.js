@@ -1,11 +1,13 @@
 import { Game } from './engine.js';
 import { setupInput } from './input.js';
 import { joinRoom } from './net.js';
+import { submitScore, loadBoard, utcDay, daySeed } from './scores.js';
 
 const $ = s => document.querySelector(s);
 const LOCAL = new URLSearchParams(location.search).has('local');
 const SEAT = ['#7fe0ff', '#ff7ab6', '#9dff8a', '#ffd166'];
-const CREW = { A: { name: 'Blue crew', color: '#7fe0ff' }, B: { name: 'Red crew', color: '#ff8a6b' } };
+const OPP = '#ff8a6b';
+const PORTAL = (() => { try { return window.self !== window.top; } catch (e) { return true; } })() || /crazygames/i.test(document.referrer) || new URLSearchParams(location.search).has('portal');
 const store = {
   get(k, d) { try { const v = localStorage.getItem('ks_' + k); return v == null ? d : JSON.parse(v); } catch (e) { return d; } },
   set(k, v) { try { localStorage.setItem('ks_' + k, JSON.stringify(v)); } catch (e) {} },
@@ -37,6 +39,12 @@ const sound = {
 /* ---------------- state ---------------- */
 const cv = $('#cv');
 const me = { id: Math.random().toString(36).slice(2, 10), name: store.get('name', ''), color: SEAT[0] };
+let device = store.get('dev', null);
+if (!device) { device = 'd' + Math.random().toString(36).slice(2, 12) + Date.now().toString(36); store.set('dev', device); }
+const expertOK = () => store.get('expertOK', false);
+let lvl = store.get('lvl', 'beginner');
+if (lvl === 'expert' && !expertOK()) lvl = 'beginner';
+let run = { daily: false };
 let game = new Game(cv, { mode: 'demo', me });
 game.start();
 let mode = 'menu';
@@ -88,9 +96,12 @@ function modal(html) { $('#card').innerHTML = html; $('#modal').hidden = !html; 
 function renderMenu() {
   const b = store.get('best', 0);
   $('#bestLine').textContent = b ? `Best solo score ${b}` : '';
-  $('#sndBtn').textContent = 'Sound: ' + (sound.on ? 'on' : 'off');
-  $('#kbBtn').hidden = !touch; $('#kbBtn').textContent = 'Keyboard: ' + (gameKb() ? 'game keyboard' : "phone's keyboard");
+  $('#sndBtn').textContent = 'Sound ' + (sound.on ? 'on' : 'off');
+  $('#kbBtn').hidden = !touch; $('#kbBtn').textContent = 'Keys: ' + (gameKb() ? 'built-in' : 'phone');
   $('#nameIn').value = me.name;
+  $('#lvB').setAttribute('aria-pressed', lvl === 'beginner'); $('#lvX').setAttribute('aria-pressed', lvl === 'expert');
+  $('#lvX').textContent = expertOK() ? 'Expert' : 'Expert (locked)'; $('#lvX').classList.toggle('lock', !expertOK());
+  $('#lvHint').textContent = lvl === 'beginner' ? 'Slower, short words, 4 lives' : 'Fast, longer words, 3 lives';
 }
 function toMenu() {
   if (session) { session.room.leave(); session = null; }
@@ -106,10 +117,12 @@ function needName() {
 }
 
 /* ---------------- solo ---------------- */
-function startSolo() {
+function startSolo(daily) {
   sound.ctx();
   me.color = SEAT[0];
-  game = new Game(cv, { mode: 'solo', me, sound, cb: { onOver: () => endSolo() } });
+  const day = utcDay();
+  run = { daily: !!daily, day, lvl };
+  game = new Game(cv, { mode: 'solo', me, sound, diff: lvl, seed: daily ? daySeed(lvl, day) : undefined, cb: { onOver: () => endSolo() } });
   beginCountdown();
 }
 function beginCountdown() {
@@ -118,13 +131,47 @@ function beginCountdown() {
 }
 function endSolo() {
   mode = 'over'; input.blur();
-  const p = game.p, s = game.stats, best = store.get('best', 0), nb = p.score > best;
-  if (nb) store.set('best', p.score);
-  modal(`<h2>${nb ? 'New best' : 'Ship down'}</h2>
+  const p = game.p, s = game.stats, key = run.daily ? 'bestd_' + run.lvl : 'best_' + run.lvl;
+  const best = store.get(key, 0), nb = p.score > best;
+  if (nb) store.set(key, p.score);
+  let unlocked = false;
+  if (run.lvl === 'beginner' && p.dist >= 1000 && !expertOK()) { store.set('expertOK', true); unlocked = true; }
+  const levelName = run.lvl === 'beginner' ? 'Beginner' : 'Expert';
+  modal(`<h2>${run.daily ? 'Daily challenge' : nb ? 'New best' : 'Ship down'}</h2>
     <div class="stats"><div><b>${p.score}</b><span>Score</span></div><div><b>${Math.round(p.dist)} m</b><span>Distance</span></div>
     <div><b>${s.words}</b><span>Words</span></div><div><b>${acc(s)}%</b><span>Accuracy</span></div></div>
-    <p class="sub">Best combo x${p.best} · Best score ${Math.max(best, p.score)}</p>
-    <button class="btn primary" data-a="again">Fly again</button><button class="btn" data-a="menu">Menu</button>`);
+    <p class="sub">${levelName} · Best combo x${p.best} · Best ${Math.max(best, p.score)}</p>
+    ${unlocked ? '<p class="sub" style="color:var(--gold)">Expert unlocked. Pick it on the menu.</p>' : ''}
+    <p id="rankLine" class="sub">${run.daily ? 'Saving your score…' : ''}</p>
+    <button class="btn primary" data-a="again">${run.daily ? 'Try today\'s course again' : 'Fly again'}</button>
+    ${run.daily ? `<button class="btn" data-a="board" data-lv="${run.lvl}" data-pd="day">Leaderboard</button>` : ''}
+    <button class="btn" data-a="menu">Menu</button>`);
+  if (run.daily) postScore(p, s, run);
+}
+async function postScore(p, s, r) {
+  const set = t => { const el = $('#rankLine'); if (el) el.textContent = t; };
+  try {
+    const res = await submitScore({ device, name: me.name, level: r.lvl, day: r.day, score: p.score, dist: Math.round(p.dist), words: s.words, keys: s.keys, good: s.good, secs: +p.time.toFixed(1) });
+    if (!res?.ok) { set(res?.error === 'implausible' ? 'Score not saved: run looked invalid.' : 'Score not saved.'); return; }
+    const rows = await loadBoard(r.lvl, 'day', device), mine = rows.find(x => x.mine);
+    set(mine ? `Today's rank: #${mine.rank}` : 'Score saved');
+  } catch (e) { set("Couldn't reach the leaderboard. Your score wasn't saved."); }
+}
+let overHtml = '';
+async function showBoard(level, period) {
+  if (mode === 'over' && $('#rankLine')) overHtml = $('#card').innerHTML;
+  const lv = level || run.lvl || lvl, pd = period || 'day';
+  const tabs = (items, attr, cur) => `<div class="seg">${items.map(([v, t]) => `<button data-a="board" data-${attr}="${v}" aria-pressed="${v === cur}" ${attr === 'lv' ? `data-pd="${pd}"` : `data-lv="${lv}"`}>${t}</button>`).join('')}</div>`;
+  modal(`<h2>Leaderboard</h2>
+    ${tabs([['beginner', 'Beginner'], ['expert', 'Expert']], 'lv', lv)}
+    ${tabs([['day', 'Today'], ['week', 'This week'], ['all', 'All time']], 'pd', pd)}
+    <div id="lbBody" class="sub">Loading…</div>
+    <p class="sub" style="font-size:12px">Daily challenge scores only. Everyone flies the same course each day.</p>
+    <button class="btn" data-a="${mode === 'over' ? 'back' : 'close'}">Close</button>`);
+  try {
+    const rows = await loadBoard(lv, pd, device);
+    $('#lbBody').innerHTML = rows.length ? `<table class="lb">${rows.map(r => `<tr class="${r.mine ? 'mine' : ''}"><td>${r.rank}</td><td>${esc(r.name)}</td><td>${r.score}</td><td>${r.dist} m</td></tr>`).join('')}</table>` : 'No scores yet. Be the first.';
+  } catch (e) { $('#lbBody').textContent = "Couldn't load the leaderboard."; }
 }
 const acc = s => s.keys ? Math.round(s.good / s.keys * 100) : 100;
 
@@ -141,7 +188,7 @@ async function enterRoom(code) {
   if (code.length !== 4) { $('#netErr').textContent = 'Codes are 4 letters'; return; }
   $('#netErr').textContent = 'Connecting…';
   try {
-    const state = { name: me.name, team: 'A', joined: Date.now(), mode: 'copilot' };
+    const state = { name: me.name, joined: Date.now(), mode: 'copilot', ready: false, level: lvl };
     const room = await joinRoom(code, me, state, LOCAL);
     session = { room, code, state, info: {}, cfg: null, crew: null, ghosts: {}, sendT: 0, stT: 0 };
     bindRoom(room);
@@ -154,29 +201,41 @@ async function enterRoom(code) {
 }
 
 // Presence (name, join time) is sent once when joining: Supabase closes a player's connection if presence
-// changes more than a few times per 30 s. Team and mode choices travel as ordinary messages instead.
+// changes more than a few times per 30 s. Mode and Ready travel as ordinary messages instead.
+const MY = () => ({ mode: session.state.mode, ready: session.state.ready, level: session.state.level });
 function lobbyPeers() {
-  return session.room.peers().map(p => ({ ...p, ...(p.id === me.id ? { team: session.state.team, mode: session.state.mode } : session.info[p.id] || {}) }));
+  return session.room.peers().map(p => ({ ...p, ...(p.id === me.id ? MY() : session.info[p.id] || {}) }));
 }
-function sendSt() { session?.room.send('st', { state: { team: session.state.team, mode: session.state.mode } }); }
+function sendSt() { session?.room.send('st', { state: MY() }); }
 function hostOf(peers) { return [...peers].sort((a, b) => (a.joined - b.joined) || (a.id < b.id ? -1 : 1))[0]; }
+const lvName = l => l === 'expert' ? 'Expert' : 'Beginner';
+function lobbyStatus(peers, host, m) {
+  const n = peers.length, notReady = peers.filter(p => !p.ready).length;
+  const sizeOk = m === 'copilot' ? n >= 2 && n <= 4 : n === 2;
+  const why = n < 2 ? (m === 'copilot' ? 'Waiting for at least one more player' : 'Waiting for your opponent')
+    : !sizeOk ? (m === 'copilot' ? 'Co-pilot takes up to 4 players' : '1v1 race needs exactly 2 players')
+    : notReady ? `${notReady} ${notReady === 1 ? 'player is' : 'players are'} not ready` : '';
+  return { ok: sizeOk && !notReady, why };
+}
 
 function renderLobby() {
   if (!session) return;
-  const peers = lobbyPeers(), host = hostOf(peers), amHost = host && host.id === me.id;
-  const m = host?.mode || 'copilot';
+  let peers = lobbyPeers(), host = hostOf(peers);
+  const m = host?.mode || 'copilot', lv = host?.level || 'beginner';
+  if (session.lastMode && session.lastMode !== m && session.state.ready) { session.state.ready = false; sendSt(); peers = lobbyPeers(); }
+  session.lastMode = m;
+  const amHost = host && host.id === me.id;
   $('#lobbyCode').textContent = session.code;
   $('#modeCo').setAttribute('aria-pressed', m === 'copilot'); $('#modeRace').setAttribute('aria-pressed', m === 'race');
   $('#modeCo').disabled = $('#modeRace').disabled = !amHost;
-  $('#modeHint').textContent = m === 'copilot' ? 'Everyone flies one ship together. Shared score and lives.' : 'Two crews race to the finish line. Blast rocks to boost, get hit and you slow down.';
-  $('#teamRow').hidden = m !== 'race';
+  $('#modeHint').textContent = (m === 'copilot' ? 'Fly one ship together. Shared score and lives.' : 'Each pilot flies their own ship. First to 2,000 m wins.') + ' Level: ' + lvName(lv) + '.';
   const sorted = [...peers].sort((a, b) => a.joined - b.joined);
-  $('#players').innerHTML = sorted.map(p => `<li><span class="dot" style="background:${m === 'race' ? CREW[p.team || 'A'].color : '#7fe0ff'}"></span>${esc(p.name || '?')}${p.id === me.id ? ' <em>you</em>' : ''}${host && p.id === host.id ? ' <em>host</em>' : ''}${m === 'race' ? `<small>${CREW[p.team || 'A'].name}</small>` : ''}</li>`).join('');
-  $('#teamA').setAttribute('aria-pressed', session.state.team === 'A'); $('#teamB').setAttribute('aria-pressed', session.state.team === 'B');
-  const a = peers.filter(p => (p.team || 'A') === 'A').length, b = peers.length - a;
-  const ok = m === 'copilot' ? peers.length >= 2 : a >= 1 && b >= 1 && a <= 4 && b <= 4;
-  $('#startBtn').hidden = !amHost; $('#startBtn').disabled = !ok;
-  $('#waitHint').textContent = amHost ? (ok ? '' : m === 'copilot' ? 'Waiting for at least one more player' : 'Each crew needs at least 1 player. Someone must tap Red crew.') : (m === 'race' ? 'Pick your crew above, then wait for the host to start' : 'Waiting for the host to start');
+  $('#players').innerHTML = sorted.map(p => `<li><span class="dot" style="background:${p.id === me.id ? '#7fe0ff' : OPP}"></span>${esc(p.name || '?')}${p.id === me.id ? ' <em>you</em>' : ''}${host && p.id === host.id ? ' <em>host</em>' : ''}<span class="st ${p.ready ? 'ok' : ''}">${p.ready ? 'Ready' : 'Not ready'}</span></li>`).join('');
+  const st = lobbyStatus(peers, host, m), mineReady = !!session.state.ready;
+  $('#readyBtn').textContent = mineReady ? 'Not ready (undo)' : "I'm ready";
+  $('#readyBtn').className = 'btn ' + (mineReady ? 'small' : 'primary');
+  $('#startBtn').hidden = !amHost; $('#startBtn').disabled = !st.ok;
+  $('#waitHint').textContent = amHost ? st.why : st.ok ? 'Everyone is ready. Waiting for the host to start' : (mineReady ? 'Waiting for the others to get ready' : "Tap I'm ready when you're set");
 }
 
 function bindRoom(room) {
@@ -199,9 +258,10 @@ function setMyState(patch) { Object.assign(session.state, patch); sendSt(); rend
 function hostStart() {
   const peers = [...lobbyPeers()].sort((a, b) => (a.joined - b.joined) || (a.id < b.id ? -1 : 1));
   const host = peers[0], m = host.mode || 'copilot';
-  const crews = m === 'copilot' ? { A: peers.map(p => p.id) } : { A: peers.filter(p => (p.team || 'A') === 'A').map(p => p.id), B: peers.filter(p => p.team === 'B').map(p => p.id) };
+  if (!lobbyStatus(peers, host, m).ok) return;
+  const crews = m === 'copilot' ? { A: peers.map(p => p.id) } : { A: [peers[0].id], B: [peers[1].id] };
   const names = Object.fromEntries(peers.map(p => [p.id, p.name]));
-  const cfg = { seed: (Math.random() * 1e9) | 0, mode: m, crews, names, raceLen: 2000 };
+  const cfg = { seed: (Math.random() * 1e9) | 0, mode: m, level: host.level || 'beginner', crews, names, raceLen: 2000 };
   session.room.send('start', { cfg });
   startOnline(cfg);
 }
@@ -210,6 +270,7 @@ function startOnline(cfg) {
   if (!session) return;
   sound.ctx();
   session.cfg = cfg; session.ghosts = {};
+  session.state.ready = false; for (const k in session.info) session.info[k] = { ...session.info[k], ready: false };
   session.crew = Object.keys(cfg.crews).find(k => cfg.crews[k].includes(me.id));
   if (!session.crew) return;                       // joined after the start: stay in lobby
   const list = cfg.crews[session.crew], seat = list.indexOf(me.id);
@@ -218,7 +279,7 @@ function startOnline(cfg) {
   const auth = list.find(id => present.has(id)) || list[0];
   game = new Game(cv, {
     mode: cfg.mode === 'race' ? 'race' : 'copilot', seed: cfg.seed, crew: list.length, raceLen: cfg.raceLen,
-    auth: auth === me.id, me, sound,
+    auth: auth === me.id, me, sound, diff: cfg.level,
     seats: cfg.mode === 'race' ? null : list.map((id, i) => ({ id, name: cfg.names[id] || '?', color: SEAT[i % SEAT.length] })),
     cb: {
       onAim: (id, typed) => session?.room.send('aim', { crew: session.crew, id, typed, color: me.color, name: me.name }),
@@ -245,7 +306,8 @@ function onlineTick(dt) {
     session.room.send('plane', { crew: session.crew, seed: session.cfg.seed, s: game.planeState() });
   }
   const others = Object.values(session.ghosts);
-  game.ghosts = others.map(g => ({ dist: g.dist, color: CREW[g.crew].color, name: CREW[g.crew].name, side: session.crew === 'A' ? 1 : -1 }));
+  const nm = c => session.cfg.names[session.cfg.crews[c]?.[0]] || 'Rival';
+  game.ghosts = others.map(g => ({ dist: g.dist, color: OPP, name: nm(g.crew), side: session.crew === 'A' ? 1 : -1 }));
   if (mode !== 'play') return;
   if (session.cfg.mode === 'race') {
     const done = game.p.finished || others.some(g => g.finished);
@@ -255,11 +317,12 @@ function onlineTick(dt) {
 
 function endRace() {
   mode = 'over'; input.blur();
+  const nm = c => esc(session.cfg.names[session.cfg.crews[c]?.[0]] || 'Rival');
   const mine = { crew: session.crew, dist: game.p.dist, finished: game.p.finished, time: game.p.time };
   const all = [mine, ...Object.values(session.ghosts)].sort((a, b) => (b.finished - a.finished) || (a.finished ? a.time - b.time : b.dist - a.dist));
   const won = all[0].crew === session.crew;
-  modal(`<h2>${won ? 'Your crew wins' : 'Your crew lost'}</h2>
-    <ol class="rank">${all.map(c => `<li style="color:${CREW[c.crew].color}">${CREW[c.crew].name}<span>${c.finished ? c.time.toFixed(1) + ' s' : Math.round(c.dist) + ' m'}</span></li>`).join('')}</ol>
+  modal(`<h2>${won ? 'You win' : 'You lost'}</h2>
+    <ol class="rank">${all.map(c => `<li style="color:${c.crew === session.crew ? '#7fe0ff' : OPP}">${c.crew === session.crew ? 'You' : nm(c.crew)}<span>${c.finished ? c.time.toFixed(1) + ' s' : Math.round(c.dist) + ' m'}</span></li>`).join('')}</ol>
     <p class="sub">You typed ${game.stats.words} words · ${acc(game.stats)}% accuracy</p>
     <button class="btn primary" data-a="lobby">Back to lobby</button><button class="btn" data-a="menu">Leave</button>`);
 }
@@ -285,7 +348,7 @@ function hud() {
     const lead = game.ghosts.length ? Math.round(p.dist - Math.max(...game.ghosts.map(g => g.dist))) : 0;
     center = `<div class="race"><div class="bar"><i class="fin"></i>${gh}<i class="mk me" style="left:${pct(p.dist)}%;background:${me.color}"></i></div><small>${Math.round(p.dist)} / ${L} m · ${lead >= 0 ? '+' : ''}${lead} m</small></div>`;
   } else center = `<div class="dist">${Math.round(p.dist)} m<small>Lv ${game.level()}</small></div>`;
-  const lives = p.lives >= 0 ? `<span class="hp">${'♥'.repeat(p.lives)}<s>${'♥'.repeat(Math.max(0, 3 - p.lives))}</s></span>` : '';
+  const lives = p.lives >= 0 ? `<span class="hp">${'♥'.repeat(p.lives)}<s>${'♥'.repeat(Math.max(0, game.maxLives - p.lives))}</s></span>` : '';
   const html = `<div class="sc">${p.score}</div>${center}<div class="rt">${lives}<span class="cb">${p.combo > 1 ? 'x' + p.combo : ''}</span></div>`;
   if (html !== hudCache) { hudCache = html; $('#hudMain').innerHTML = html; }
 }
@@ -311,7 +374,15 @@ if (LOCAL) window.__ks = () => game;
 requestAnimationFrame(loop);
 
 /* ---------------- wiring ---------------- */
-$('#soloBtn').onclick = () => { if (needName()) startSolo(); };
+$('#soloBtn').onclick = () => { if (needName()) startSolo(false); };
+$('#dailyBtn').onclick = () => { if (needName()) startSolo(true); };
+$('#lbBtn').onclick = () => showBoard(lvl, 'day');
+$('#lvB').onclick = () => { lvl = 'beginner'; store.set('lvl', lvl); renderMenu(); };
+$('#lvX').onclick = () => {
+  if (expertOK()) { lvl = 'expert'; store.set('lvl', lvl); renderMenu(); return; }
+  modal(`<h2>Expert is locked</h2><p class="sub">It unlocks when you fly 1,000 m on Beginner. Already a fast typist?</p>
+    <button class="btn primary" data-a="unlock">Unlock Expert now</button><button class="btn" data-a="close">Stay on Beginner</button>`);
+};
 $('#onlineBtn').onclick = () => { if (needName()) { show('online'); $('#netErr').textContent = ''; } };
 $('#kbBtn').onclick = () => { kbPref = gameKb() ? 'phone' : 'game'; store.set('kb2', kbPref); renderMenu(); };
 $('#sndBtn').onclick = () => { sound.on = !sound.on; store.set('sound', sound.on); renderMenu(); };
@@ -322,8 +393,7 @@ $('#backBtn').onclick = () => toMenu();
 $('#leaveLobby').onclick = () => { history.replaceState(null, '', location.pathname + location.search); toMenu(); };
 $('#modeCo').onclick = () => setMyState({ mode: 'copilot' });
 $('#modeRace').onclick = () => setMyState({ mode: 'race' });
-$('#teamA').onclick = () => setMyState({ team: 'A' });
-$('#teamB').onclick = () => setMyState({ team: 'B' });
+$('#readyBtn').onclick = () => setMyState({ ready: !session.state.ready });
 $('#startBtn').onclick = () => hostStart();
 $('#shareBtn').onclick = async () => {
   const url = location.origin + location.pathname + '#' + session.code;
@@ -341,11 +411,14 @@ $('#stage').addEventListener('touchend', e => { if (!gameKb() && (mode === 'play
 $('#card').addEventListener('click', e => {
   const a = e.target.closest('button')?.dataset.a; if (!a) return;
   if (a === 'menu') toMenu();
-  if (a === 'again') startSolo();
+  if (a === 'again') startSolo(run.daily);
+  if (a === 'unlock') { store.set('expertOK', true); lvl = 'expert'; store.set('lvl', lvl); modal(''); renderMenu(); }
+  if (a === 'board') showBoard(e.target.closest('button').dataset.lv, e.target.closest('button').dataset.pd);
+  if (a === 'back') modal(overHtml);
   if (a === 'resume') { modal(''); if (!gameKb()) input.focus(); mode = 'count'; countT = 2.2; }
   if (a === 'stay') { modal(''); if (!gameKb()) input.focus(); }
   if (a === 'close') modal('');
-  if (a === 'lobby') { modal(''); mode = 'menu'; session.cfg = null; game = new Game(cv, { mode: 'demo', me }); game.start(); show('lobby'); renderLobby(); }
+  if (a === 'lobby') { modal(''); mode = 'menu'; session.cfg = null; session.state.ready = false; sendSt(); game = new Game(cv, { mode: 'demo', me }); game.start(); show('lobby'); renderLobby(); }
 });
 document.addEventListener('visibilitychange', () => { if (document.hidden) pause(); });
 
@@ -358,10 +431,10 @@ if (/^[A-Z]{4}$/.test(hashCode)) { $('#codeIn').value = hashCode; if (me.name) s
 const standalone = matchMedia('(display-mode: standalone)').matches || navigator.standalone === true;
 const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
 let installEvt = null;
-if ('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js').catch(() => {});
-addEventListener('beforeinstallprompt', e => { e.preventDefault(); installEvt = e; $('#installBtn').hidden = false; });
+if ('serviceWorker' in navigator && !PORTAL) navigator.serviceWorker.register('sw.js').catch(() => {});
+addEventListener('beforeinstallprompt', e => { e.preventDefault(); installEvt = e; $('#installBtn').hidden = PORTAL; });
 addEventListener('appinstalled', () => { $('#installBtn').hidden = true; installEvt = null; });
-if (!standalone && isIOS) $('#installBtn').hidden = false;
+if (!standalone && isIOS && !PORTAL) $('#installBtn').hidden = false;
 $('#installBtn').onclick = async () => {
   if (installEvt) { installEvt.prompt(); await installEvt.userChoice.catch(() => {}); installEvt = null; $('#installBtn').hidden = true; return; }
   const safari = isIOS && !/CriOS|FxiOS|EdgiOS/.test(navigator.userAgent);

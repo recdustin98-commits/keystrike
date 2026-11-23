@@ -16,10 +16,12 @@ const rnd = (a, b) => a + Math.random() * (b - a);
 
 /* ---------------- Course: the same obstacles for everyone with the same seed ---------------- */
 export class Course {
-  constructor(seed, crew = 1) {
+  constructor(seed, crew = 1, diff = 'expert') {
     this.r = rng(seed);
     this.crew = crew;
-    this.spacing = 18.5 / (1 + 0.55 * (crew - 1));
+    this.diff = diff;
+    this.ws = diff === 'beginner' ? 1.6 : 1;       // beginner: short words last longer
+    this.spacing = (diff === 'beginner' ? 24 : 18.5) / (1 + 0.55 * (crew - 1));
     this.lastThreat = 0;
     this.list = [];
     this.next = ZMAX - 4;    // first obstacle appears at the horizon right at GO, not on top of you
@@ -38,7 +40,7 @@ export class Course {
     const threat = d - this.lastThreat > this.spacing * 2.2 || roll < Math.min(0.72, 0.6 + d / 25000);
     if (threat) this.lastThreat = d;
     const x = threat ? (r() * 2 - 1) * 0.3 : (r() < 0.5 ? -1 : 1) * (1 + r() * (1.3 + 0.3 * (this.crew - 1)));
-    const pool = wordsFor(d);
+    const pool = wordsFor(d / this.ws);
     const used = new Set(this.list.slice(-Math.min(22, 10 + this.crew * 4)).map(o => o.w[0]));
     let w = null;
     for (let i = 0; i < 30; i++) { const c = pool[Math.floor(r() * pool.length)]; if (!used.has(c[0])) { w = c; break; } }
@@ -115,16 +117,18 @@ export class Game {
     this.demo = this.mode === 'demo';
     this.seed = o.seed ?? ((Math.random() * 1e9) | 0);
     this.crew = o.crew || 1;
+    this.diff = o.diff === 'beginner' ? 'beginner' : 'expert';
+    this.maxLives = this.diff === 'beginner' ? 4 : 3;
     this.auth = o.auth !== false;            // this device moves the plane and keeps score
     this.me = o.me || { id: 'me', color: '#7fe0ff', name: 'You' };
     this.seats = o.seats && o.seats.length ? o.seats : [this.me];   // co-pilots on this ship, in seat order
     this.raceLen = o.raceLen || 2000;
     this.cb = o.cb || {};
-    this.course = new Course(this.seed, this.crew);
+    this.course = new Course(this.seed, this.crew, this.diff);
     this.dead = new Set();
     this.aims = new Map();                   // other seats: seatId -> {id, typed, color, name}
     this.target = null; this.typed = 0;
-    this.p = { dist: 0, speed: 0, boostT: 0, slowT: 0, lives: this.mode === 'race' ? -1 : 3, score: 0, combo: 0, best: 0, finished: false, over: false, time: 0 };
+    this.p = { dist: 0, speed: 0, boostT: 0, slowT: 0, lives: this.mode === 'race' ? -1 : this.maxLives, score: 0, combo: 0, best: 0, finished: false, over: false, time: 0 };
     this.stats = { keys: 0, good: 0, words: 0 };
     this.parts = []; this.floats = []; this.beams = []; this.rings = [];
     this.shake = 0; this.flash = 0; this.flashCol = '255,60,50'; this.aim = 0; this.lo = 0;
@@ -139,9 +143,10 @@ export class Game {
 
   /* ---- rules ---- */
   base(d) {
-    if (this.mode === 'race') return 11 + d * 0.003;
+    const b = this.diff === 'beginner';
+    if (this.mode === 'race') return b ? 9 + d * 0.0025 : 11 + d * 0.003;
     if (this.demo) return 9;
-    return Math.min(24, 9.5 + d * 0.0026);
+    return b ? Math.min(18, 7.5 + d * 0.0018) : Math.min(24, 9.5 + d * 0.0026);
   }
   level() { return 1 + Math.floor(this.p.dist / 400); }
   calcSpeed() {

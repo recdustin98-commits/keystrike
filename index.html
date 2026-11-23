@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,interactive-widget=resizes-content">
 <title>Keystrike</title>
-<meta name="description" content="Keystrike: fly through an asteroid field by typing. Play solo, as co-pilots, or race crews up to 4 vs 4.">
+<meta name="description" content="Keystrike: fly through an asteroid field by typing. Play solo, take the daily challenge, fly as co-pilots, or race a friend 1 vs 1.">
 <meta name="theme-color" content="#070b1f">
 <link rel="icon" href="icon.svg" type="image/svg+xml">
 <link rel="apple-touch-icon" href="icon-180.png">
@@ -32,20 +32,22 @@
         <p class="tag">Type to fly. Blast the rocks in your path, grab the gold for bonus.</p>
         <label class="field"><span>Your name</span><input id="nameIn" maxlength="12" autocomplete="nickname" autocapitalize="words" placeholder="Pilot name"></label>
         <p id="nameErr" class="err" role="alert"></p>
+        <div id="lvSeg" class="seg" role="group" aria-label="Level"><button id="lvB">Beginner</button><button id="lvX">Expert</button></div>
+        <p id="lvHint" class="sub"></p>
         <button id="soloBtn" class="btn primary">Solo flight</button>
+        <button id="dailyBtn" class="btn">Daily challenge</button>
         <button id="onlineBtn" class="btn gold">Play with friends</button>
         <button id="installBtn" class="btn" hidden>Download app</button>
         <p id="bestLine" class="sub"></p>
-        <button id="kbBtn" class="btn small"></button>
-        <button id="sndBtn" class="btn small"></button>
-        <p class="sub" style="font-size:12px;opacity:.7">Version 1.7</p>
+        <div class="mini"><button id="lbBtn" class="btn small">Scores</button><button id="kbBtn" class="btn small"></button><button id="sndBtn" class="btn small"></button></div>
+        <p class="sub" style="font-size:12px;opacity:.7">Version 2.0</p>
       </div>
     </section>
 
     <section id="online" class="screen" hidden>
       <div class="panel">
         <h2>Play with friends</h2>
-        <p class="sub">Create a game and share the 4-letter code, or type a code to join. Up to 8 players.</p>
+        <p class="sub">Create a game and share the 4-letter code, or type a code to join.</p>
         <button id="createBtn" class="btn primary">Create a game</button>
         <div class="or"><span>or join</span></div>
         <input id="codeIn" class="code" maxlength="4" autocomplete="off" autocorrect="off" autocapitalize="characters" spellcheck="false" placeholder="CODE" aria-label="Game code">
@@ -60,11 +62,11 @@
         <p class="sub">Game code</p>
         <div id="lobbyCode" class="bigcode"></div>
         <button id="shareBtn" class="btn small">Share invite</button>
-        <div class="seg" role="group" aria-label="Mode"><button id="modeCo">Co-pilot</button><button id="modeRace">Crew race</button></div>
+        <div class="seg" role="group" aria-label="Mode"><button id="modeCo">Co-pilot</button><button id="modeRace">1v1 race</button></div>
         <p id="modeHint" class="sub"></p>
-        <div id="teamRow" class="seg" role="group" aria-label="Your crew"><button id="teamA" class="tA">Blue crew</button><button id="teamB" class="tB">Red crew</button></div>
         <ul id="players"></ul>
-        <button id="startBtn" class="btn primary">Start</button>
+        <button id="readyBtn" class="btn primary">I'm ready</button>
+        <button id="startBtn" class="btn gold">Start</button>
         <p id="waitHint" class="sub"></p>
         <button id="leaveLobby" class="btn small">Leave</button>
       </div>

@@ -6,6 +6,7 @@ const SUPABASE_URL = 'https://egpmhkckdmhbkbtwtegl.supabase.co';
 const SUPABASE_ANON = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImVncG1oa2NrZG1oYmtidHd0ZWdsIiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTUzMTc2NzEsImV4cCI6MjExMDg5MzY3MX0.0e0UM65DTwmi5dS8wnTgOa3hC2Hub7wZUiTk3pxLD94';
 
 let client = null;
+export function getClient() { client ||= createClient(SUPABASE_URL, SUPABASE_ANON, { realtime: { params: { eventsPerSecond: 30 } } }); return client; }
 
 class Room {
   constructor(me) { this.me = me; this.handlers = {}; this.peerFns = []; this.list = []; }
@@ -18,7 +19,7 @@ class Room {
 
 class SupaRoom extends Room {
   async join(code, state) {
-    client ||= createClient(SUPABASE_URL, SUPABASE_ANON, { realtime: { params: { eventsPerSecond: 30 } } });
+    getClient();
     this.ch = client.channel('ks-' + code, { config: { broadcast: { self: false }, presence: { key: this.me.id } } });
     this.ch.on('broadcast', { event: 'm' }, ({ payload }) => this.dispatch(payload));
     this.ch.on('presence', { event: 'sync' }, () => {
