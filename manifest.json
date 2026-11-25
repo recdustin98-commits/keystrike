@@ -3,8 +3,8 @@
  "short_name": "Keystrike",
  "start_url": "/",
  "display": "standalone",
- "background_color": "#04060f",
- "theme_color": "#070b1f",
+ "background_color": "#2a1a4d",
+ "theme_color": "#6a45c4",
  "icons": [
   {
    "src": "icon-192.png",

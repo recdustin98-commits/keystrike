@@ -5,8 +5,8 @@ import { submitScore, loadBoard, utcDay, daySeed } from './scores.js';
 
 const $ = s => document.querySelector(s);
 const LOCAL = new URLSearchParams(location.search).has('local');
-const SEAT = ['#7fe0ff', '#ff7ab6', '#9dff8a', '#ffd166'];
-const OPP = '#ff8a6b';
+const SEAT = ['#2fa8ff', '#ff4f9a', '#22c27a', '#ffa91f'];
+const OPP = '#ff7a45';
 const PORTAL = (() => { try { return window.self !== window.top; } catch (e) { return true; } })() || /crazygames/i.test(document.referrer) || new URLSearchParams(location.search).has('portal');
 const store = {
   get(k, d) { try { const v = localStorage.getItem('ks_' + k); return v == null ? d : JSON.parse(v); } catch (e) { return d; } },
@@ -39,6 +39,10 @@ const sound = {
 /* ---------------- state ---------------- */
 const cv = $('#cv');
 const me = { id: Math.random().toString(36).slice(2, 10), name: store.get('name', ''), color: SEAT[0] };
+/* A pilot name is assigned on the first visit (saved on this device); the player can edit it or roll a new one. */
+const NAME_A = ['Sakura', 'Hoshi', 'Neko', 'Kitsune', 'Mochi', 'Nova', 'Luna', 'Ryu', 'Kumo', 'Tora', 'Yuki', 'Hana', 'Sora', 'Aoi', 'Riku', 'Kira', 'Momo', 'Taiyo'];
+const genName = () => NAME_A[Math.floor(Math.random() * NAME_A.length)] + (100 + Math.floor(Math.random() * 900));
+if (!me.name) { me.name = genName(); store.set('name', me.name); }
 let device = store.get('dev', null);
 if (!device) { device = 'd' + Math.random().toString(36).slice(2, 12) + Date.now().toString(36); store.set('dev', device); }
 const expertOK = () => store.get('expertOK', false);
@@ -111,8 +115,8 @@ function toMenu() {
 }
 
 function needName() {
-  const n = $('#nameIn').value.trim().slice(0, 12);
-  if (!n) { $('#nameErr').textContent = 'Enter a name first'; $('#nameIn').focus(); return false; }
+  let n = $('#nameIn').value.trim().slice(0, 12);
+  if (!n) { n = genName(); $('#nameIn').value = n; }   // never blocks: an empty field gets a fresh default name
   me.name = n; store.set('name', n); $('#nameErr').textContent = ''; return true;
 }
 
@@ -230,7 +234,7 @@ function renderLobby() {
   $('#modeCo').disabled = $('#modeRace').disabled = !amHost;
   $('#modeHint').textContent = (m === 'copilot' ? 'Fly one ship together. Shared score and lives.' : 'Each pilot flies their own ship. First to 2,000 m wins.') + ' Level: ' + lvName(lv) + '.';
   const sorted = [...peers].sort((a, b) => a.joined - b.joined);
-  $('#players').innerHTML = sorted.map(p => `<li><span class="dot" style="background:${p.id === me.id ? '#7fe0ff' : OPP}"></span>${esc(p.name || '?')}${p.id === me.id ? ' <em>you</em>' : ''}${host && p.id === host.id ? ' <em>host</em>' : ''}<span class="st ${p.ready ? 'ok' : ''}">${p.ready ? 'Ready' : 'Not ready'}</span></li>`).join('');
+  $('#players').innerHTML = sorted.map(p => `<li><span class="dot" style="background:${p.id === me.id ? SEAT[0] : OPP}"></span>${esc(p.name || '?')}${p.id === me.id ? ' <em>you</em>' : ''}${host && p.id === host.id ? ' <em>host</em>' : ''}<span class="st ${p.ready ? 'ok' : ''}">${p.ready ? 'Ready' : 'Not ready'}</span></li>`).join('');
   const st = lobbyStatus(peers, host, m), mineReady = !!session.state.ready;
   $('#readyBtn').textContent = mineReady ? 'Not ready (undo)' : "I'm ready";
   $('#readyBtn').className = 'btn ' + (mineReady ? 'small' : 'primary');
@@ -322,7 +326,7 @@ function endRace() {
   const all = [mine, ...Object.values(session.ghosts)].sort((a, b) => (b.finished - a.finished) || (a.finished ? a.time - b.time : b.dist - a.dist));
   const won = all[0].crew === session.crew;
   modal(`<h2>${won ? 'You win' : 'You lost'}</h2>
-    <ol class="rank">${all.map(c => `<li style="color:${c.crew === session.crew ? '#7fe0ff' : OPP}">${c.crew === session.crew ? 'You' : nm(c.crew)}<span>${c.finished ? c.time.toFixed(1) + ' s' : Math.round(c.dist) + ' m'}</span></li>`).join('')}</ol>
+    <ol class="rank">${all.map(c => `<li style="color:${c.crew === session.crew ? SEAT[0] : OPP}">${c.crew === session.crew ? 'You' : nm(c.crew)}<span>${c.finished ? c.time.toFixed(1) + ' s' : Math.round(c.dist) + ' m'}</span></li>`).join('')}</ol>
     <p class="sub">You typed ${game.stats.words} words · ${acc(game.stats)}% accuracy</p>
     <button class="btn primary" data-a="lobby">Back to lobby</button><button class="btn" data-a="menu">Leave</button>`);
 }
@@ -385,6 +389,8 @@ $('#lvX').onclick = () => {
 };
 if (PORTAL) $('#onlineBtn').hidden = true;
 $('#onlineBtn').onclick = () => { if (needName()) { show('online'); $('#netErr').textContent = ''; } };
+$('#nameIn').addEventListener('change', () => needName());
+$('#nameDice').onclick = () => { $('#nameIn').value = genName(); needName(); };
 $('#kbBtn').onclick = () => { kbPref = gameKb() ? 'phone' : 'game'; store.set('kb2', kbPref); renderMenu(); };
 $('#sndBtn').onclick = () => { sound.on = !sound.on; store.set('sound', sound.on); renderMenu(); };
 $('#createBtn').onclick = () => { const c = Array.from({ length: 4 }, () => 'ABCDEFGHJKLMNPQRSTUVWXYZ'[Math.floor(Math.random() * 24)]).join(''); $('#codeIn').value = c; enterRoom(c); };

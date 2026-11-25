@@ -5,14 +5,14 @@
 <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,interactive-widget=resizes-content">
 <title>Keystrike</title>
 <meta name="description" content="Keystrike: fly through an asteroid field by typing. Play solo, take the daily challenge, fly as co-pilots, or race a friend 1 vs 1.">
-<meta name="theme-color" content="#070b1f">
+<meta name="theme-color" content="#6a45c4">
 <link rel="icon" href="icon.svg" type="image/svg+xml">
 <link rel="apple-touch-icon" href="icon-180.png">
 <link rel="manifest" href="manifest.json">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Exo+2:wght@500;600;700&family=Orbitron:wght@700;900&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Fredoka:wght@400;500;600;700&family=Mochiy+Pop+One&family=Exo+2:wght@500;600;700&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="css/style.css">
 </head>
 <body>
@@ -29,8 +29,8 @@
     <section id="menu" class="screen">
       <div class="panel">
         <h1 class="logo">KEY<span>STRIKE</span></h1>
-        <p class="tag">Type to fly. Blast the rocks in your path, grab the gold for bonus.</p>
-        <label class="field"><span>Your name</span><input id="nameIn" maxlength="12" autocomplete="nickname" autocapitalize="words" placeholder="Pilot name"></label>
+        <p class="tag">Type to fly! Zap the grumpy rocks, grab the golden gems for bonus.</p>
+        <div class="field"><label for="nameIn">Your pilot name <small style="opacity:.7">(tap to change)</small></label><div class="row"><input id="nameIn" maxlength="12" autocomplete="nickname" autocapitalize="words" placeholder="Pilot name"><button id="nameDice" class="btn small" type="button" aria-label="Random name" title="Random name">🎲</button></div></div>
         <p id="nameErr" class="err" role="alert"></p>
         <div id="lvSeg" class="seg" role="group" aria-label="Level"><button id="lvB">Beginner</button><button id="lvX">Expert</button></div>
         <p id="lvHint" class="sub"></p>
