@@ -34,6 +34,29 @@ const sound = {
   hit() { this.noise(0.5, 0.4, 400); this.tone(90, 40, 0.4, 'sawtooth', 0.06); },
   miss() { this.tone(140, 110, 0.08, 'sawtooth', 0.03); },
   go() { this.tone(520, 1040, 0.25, 'triangle', 0.06); },
+  beep() { this.tone(660, 660, 0.09, 'triangle', 0.05); },
+  cheer(c) { const b = 520 + Math.min(c, 30) * 8; this.tone(b, b * 2, 0.12, 'triangle', 0.05); setTimeout(() => this.tone(b * 1.5, b * 3, 0.16, 'triangle', 0.045), 90); },
+  /* Soft looping background tune (C - G - Am - F), generated live so the game needs no audio files. */
+  startMusic() {
+    const a = this.ctx(); if (!a || this.mt) return;
+    this.step = 0; this.next = a.currentTime + 0.1;
+    this.mt = setInterval(() => this.sched(), 60);
+  },
+  stopMusic() { clearInterval(this.mt); this.mt = null; },
+  sched() {
+    const a = this.ac; if (!a || !this.on) return this.stopMusic();
+    while (this.next < a.currentTime + 0.25) { this.note(this.step++, this.next); this.next += 60 / 126 / 4; }
+  },
+  note(s, t) {
+    const a = this.ac, bar = Math.floor(s / 16) % 4, i = s % 16;
+    const chords = [[0, 4, 7], [7, 11, 14], [9, 12, 16], [5, 9, 12]], bass = [-24, -17, -15, -19], ch = chords[bar];
+    const f = n => 261.63 * Math.pow(2, n / 12);
+    const o = (fr, d, type, vol) => { const x = a.createOscillator(), g = a.createGain(); x.type = type; x.frequency.value = fr; g.gain.setValueAtTime(0.0001, t); g.gain.linearRampToValueAtTime(vol, t + 0.01); g.gain.exponentialRampToValueAtTime(0.0001, t + d); x.connect(g).connect(a.destination); x.start(t); x.stop(t + d + 0.02); };
+    if (i % 8 === 0) o(f(bass[bar]), 0.5, 'sine', 0.07);
+    if (i % 2 === 0) o(f(ch[[0, 1, 2, 1, 2, 1, 0, 1][(i / 2) % 8] ] + 12), 0.18, 'triangle', 0.028);
+    const mel = [[12, 0], [14, 4], [16, 8], [14, 12]][bar % 4];
+    if (i === mel[1]) o(f(ch[2] + 24), 0.38, 'sine', 0.035);
+  },
 };
 
 /* ---------------- state ---------------- */
@@ -108,6 +131,7 @@ function renderMenu() {
   $('#lvHint').textContent = lvl === 'beginner' ? 'Slower, short words, 4 lives' : 'Fast, longer words, 3 lives';
 }
 function toMenu() {
+  sound.stopMusic();
   if (session) { session.room.leave(); session = null; }
   input.blur(); modal('');
   mode = 'menu'; game = new Game(cv, { mode: 'demo', me }); game.start();
@@ -134,7 +158,7 @@ function beginCountdown() {
   mode = 'count'; countT = 3.2;
 }
 function endSolo() {
-  mode = 'over'; input.blur();
+  mode = 'over'; input.blur(); sound.stopMusic();
   const p = game.p, s = game.stats, key = run.daily ? 'bestd_' + run.lvl : 'best_' + run.lvl;
   const best = store.get(key, 0), nb = p.score > best;
   if (nb) store.set(key, p.score);
@@ -181,7 +205,7 @@ const acc = s => s.keys ? Math.round(s.good / s.keys * 100) : 100;
 
 function pause() {
   if (session || (mode !== 'play' && mode !== 'count')) return;
-  mode = 'pause'; input.blur();
+  mode = 'pause'; input.blur(); sound.stopMusic();
   modal(`<h2>Paused</h2><button class="btn primary" data-a="resume">Resume</button><button class="btn" data-a="again">Restart</button><button class="btn" data-a="menu">Menu</button>`);
 }
 
@@ -320,7 +344,7 @@ function onlineTick(dt) {
 }
 
 function endRace() {
-  mode = 'over'; input.blur();
+  mode = 'over'; input.blur(); sound.stopMusic();
   const nm = c => esc(session.cfg.names[session.cfg.crews[c]?.[0]] || 'Rival');
   const mine = { crew: session.crew, dist: game.p.dist, finished: game.p.finished, time: game.p.time };
   const all = [mine, ...Object.values(session.ghosts)].sort((a, b) => (b.finished - a.finished) || (a.finished ? a.time - b.time : b.dist - a.dist));
@@ -331,7 +355,7 @@ function endRace() {
     <button class="btn primary" data-a="lobby">Back to lobby</button><button class="btn" data-a="menu">Leave</button>`);
 }
 function endCopilot() {
-  mode = 'over'; input.blur();
+  mode = 'over'; input.blur(); sound.stopMusic();
   const p = game.p;
   modal(`<h2>Ship down</h2>
     <div class="stats"><div><b>${p.score}</b><span>Team score</span></div><div><b>${Math.round(p.dist)} m</b><span>Distance</span></div>
@@ -357,14 +381,28 @@ function hud() {
   if (html !== hudCache) { hudCache = html; $('#hudMain').innerHTML = html; }
 }
 
+/* ---------------- first-run tip ---------------- */
+let tipDone = store.get('tipDone', false), tipClear = 0;
+function tipTick() {
+  const el = $('#tip'); if (!el) return;
+  const solo = game && game.mode === 'solo' && (mode === 'play' || mode === 'count');
+  if (tipDone || !solo) { el.hidden = true; return; }
+  if (game.stats.words >= 3 && !tipClear) { tipClear = performance.now(); el.textContent = 'You got it! Keep your combo going ✨'; }
+  if (tipClear && performance.now() - tipClear > 2200) { tipDone = true; store.set('tipDone', true); el.hidden = true; return; }
+  if (!tipClear) el.textContent = game.target ? 'Keep typing the word! (Enter clears the target)' : 'Type the first letter of a word to lock on!';
+  el.hidden = false;
+}
+
 /* ---------------- loop ---------------- */
-let last = 0;
+let last = 0, cdLast = 0;
 function loop(now) {
   const dt = Math.min(0.05, (now - (last || now)) / 1000); last = now;
+  tipTick();
   if (mode === 'count') {
     countT -= dt; const n = Math.ceil(countT);
+    if (countT > 0 && n <= 3 && n !== cdLast) { cdLast = n; sound.beep(); }
     msg(countT > 0 ? `<b class="count">${Math.min(3, n)}</b>` : '');
-    if (countT <= 0) { mode = 'play'; game.start(); sound.go(); }
+    if (countT <= 0) { mode = 'play'; game.start(); sound.go(); sound.startMusic(); cdLast = 0; }
   }
   // Freeze the world while paused and during the resume countdown; it moves only in play (and in the menu demo).
   if (mode === 'play' || mode === 'over' || mode === 'menu' || !game.running) game.update(dt);
@@ -392,7 +430,7 @@ $('#onlineBtn').onclick = () => { if (needName()) { show('online'); $('#netErr')
 $('#nameIn').addEventListener('change', () => needName());
 $('#nameDice').onclick = () => { $('#nameIn').value = genName(); needName(); };
 $('#kbBtn').onclick = () => { kbPref = gameKb() ? 'phone' : 'game'; store.set('kb2', kbPref); renderMenu(); };
-$('#sndBtn').onclick = () => { sound.on = !sound.on; store.set('sound', sound.on); renderMenu(); };
+$('#sndBtn').onclick = () => { sound.on = !sound.on; store.set('sound', sound.on); if (!sound.on) sound.stopMusic(); renderMenu(); };
 $('#createBtn').onclick = () => { const c = Array.from({ length: 4 }, () => 'ABCDEFGHJKLMNPQRSTUVWXYZ'[Math.floor(Math.random() * 24)]).join(''); $('#codeIn').value = c; enterRoom(c); };
 $('#joinBtn').onclick = () => enterRoom($('#codeIn').value);
 $('#codeIn').addEventListener('keydown', e => { if (e.key === 'Enter') enterRoom($('#codeIn').value); });
@@ -427,7 +465,7 @@ $('#card').addEventListener('click', e => {
   if (a === 'close') modal('');
   if (a === 'lobby') { modal(''); mode = 'menu'; session.cfg = null; session.state.ready = false; sendSt(); game = new Game(cv, { mode: 'demo', me }); game.start(); show('lobby'); renderLobby(); }
 });
-document.addEventListener('visibilitychange', () => { if (document.hidden) pause(); });
+document.addEventListener('visibilitychange', () => { if (document.hidden) { sound.stopMusic(); pause(); } else if (mode === 'play' && session) sound.startMusic(); });
 
 renderMenu();
 show('menu');

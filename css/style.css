@@ -105,3 +105,5 @@ input:focus{outline:none;border-color:var(--cyan)}
 /* name field */
 .field{gap:6px}.field label{font-weight:600}.field .row{display:flex;gap:8px;align-items:center}.field .row input{flex:1}#nameDice{flex:none;width:52px;min-height:48px;font-size:22px;padding:0}
 .err{color:#d6244a}
+#tip{position:absolute;left:50%;bottom:112px;transform:translateX(-50%);max-width:92%;text-align:center;background:#fff;color:var(--ink);border:3px solid var(--edge);box-shadow:0 3px 0 var(--edge);font-weight:700;font-size:15px;padding:8px 16px;border-radius:999px;pointer-events:none;z-index:2}
+#tip[hidden]{display:none}

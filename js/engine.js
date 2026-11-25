@@ -279,6 +279,8 @@ export class Game {
     p.score += pts;
     p.boostT = Math.min(4, p.boostT + (o.threat ? 1.2 : 2));
     this.floats.push({ x: P.x, y: P.y, t: (o.threat ? '+' : 'BONUS +') + pts, c: o.threat ? '#ffffff' : '#ffd23f', life: 0.9 });
+    const cheer = { 5: ['NICE!', '#7fe3ff'], 10: ['GREAT!', '#ffd23f'], 15: ['AWESOME!', '#ff8fc4'], 20: ['AMAZING!!', '#b69cff'], 30: ['UNREAL!!!', '#ff6b8f'], 50: ['LEGEND!!!', '#ffd23f'] }[p.combo];
+    if (cheer) { this.floats.push({ x: this.W / 2, y: this.H * 0.42, t: cheer[0], c: cheer[1], life: 1.3, big: true }); this.flash = Math.max(this.flash, 0.12); this.flashCol = '255,255,255'; this.sound?.cheer?.(p.combo); }
   }
 
   hit(o) {
@@ -479,7 +481,7 @@ export class Game {
     }
 
     g.textAlign = 'center'; g.font = '700 20px Fredoka,"Exo 2",sans-serif';
-    for (const f of this.floats) { g.globalAlpha = Math.min(1, f.life * 2); this.outText(f.t, f.x, f.y, f.c); }
+    for (const f of this.floats) { g.globalAlpha = Math.min(1, f.life * 2); g.font = (f.big ? '700 42px' : '700 20px') + ' Fredoka,"Exo 2",sans-serif'; this.outText(f.t, clamp(f.x, 70, W - 70), f.y, f.c); }
     g.globalAlpha = 1; g.textAlign = 'start';
 
     if (p.boostT > 0) { const e = g.createRadialGradient(cx, H / 2, Math.min(W, H) * 0.35, cx, H / 2, Math.max(W, H) * 0.75); e.addColorStop(0, 'rgba(255,170,220,0)'); e.addColorStop(1, `rgba(255,170,220,${Math.min(0.28, p.boostT * 0.1)})`); g.fillStyle = e; g.fillRect(0, 0, W, H); }
